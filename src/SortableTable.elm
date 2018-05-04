@@ -1,11 +1,18 @@
-module Components.SortableTable
+module SortableTable
     exposing
         ( Column
         , Config
+        , Customizations
         , SortDir(..)
         , SortState
         , createConfig
         , createKeyedConfig
+        , customizeBody
+        , customizeHead
+        , customizeRows
+        , customizeSort
+        , customizeTable
+        , defaultCustomizations
         , defineColumn
         , initSortState
         , makeSortable
@@ -14,13 +21,12 @@ module Components.SortableTable
         , view
         )
 
-import Css exposing (..)
-import Html.Styled exposing (..)
-import Html.Styled.Attributes as Attrs
-import Html.Styled.Events as Events
-import Html.Styled.Keyed
+import Html exposing (..)
+import Html.Attributes as Attrs
+import Html.Events as Events
+import Html.Keyed
+import Icons
 import Json.Decode as JD
-import Styling.Common exposing (inlineIconStyle)
 
 
 -- ************
@@ -118,23 +124,83 @@ makeSortable sortMsg col =
 
 
 type Config data msg
-    = Config { columns : List (Column data msg), toId : Maybe (data -> String) }
+    = Config
+        { columns : List (Column data msg)
+        , toId : Maybe (data -> String)
+        , customizations : Customizations data msg
+        }
 
 
 {-| Creates a table configuration without uniquely identifiable rows
 -}
-createConfig : List (Column data msg) -> Config data msg
-createConfig columns =
-    Config { columns = columns, toId = Nothing }
+createConfig : List (Column data msg) -> Customizations data msg -> Config data msg
+createConfig columns customizations =
+    Config { columns = columns, toId = Nothing, customizations = customizations }
 
 
 {-| Creates a table configuration with uniquely identifiable rows.
 The toId function is used to uniquely identify a row based on it's data.
 This is to enable use of Html.Keyed
 -}
-createKeyedConfig : (data -> String) -> List (Column data msg) -> Config data msg
-createKeyedConfig toId columns =
-    Config { columns = columns, toId = Just toId }
+createKeyedConfig :
+    (data -> String)
+    -> List (Column data msg)
+    -> Customizations data msg
+    -> Config data msg
+createKeyedConfig toId columns customizations =
+    Config { columns = columns, toId = Just toId, customizations = customizations }
+
+
+
+-- **************
+-- Customizations
+-- **************
+
+
+type Customizations data msg
+    = Customizations
+        { tableAttrs : List (Attribute msg)
+        , theadAttrs : List (Attribute msg)
+        , tbodyAttrs : List (Attribute msg)
+        , sortAttrs : List (Attribute msg)
+        , rowAttrs : data -> List (Attribute msg)
+        }
+
+
+defaultCustomizations : Customizations data msg
+defaultCustomizations =
+    Customizations
+        { tableAttrs = []
+        , theadAttrs = []
+        , tbodyAttrs = []
+        , sortAttrs = []
+        , rowAttrs = \_ -> []
+        }
+
+
+customizeTable : List (Attribute msg) -> Customizations data msg -> Customizations data msg
+customizeTable attrs (Customizations current) =
+    Customizations { current | tableAttrs = attrs }
+
+
+customizeHead : List (Attribute msg) -> Customizations data msg -> Customizations data msg
+customizeHead attrs (Customizations current) =
+    Customizations { current | theadAttrs = attrs }
+
+
+customizeBody : List (Attribute msg) -> Customizations data msg -> Customizations data msg
+customizeBody attrs (Customizations current) =
+    Customizations { current | tbodyAttrs = attrs }
+
+
+customizeSort : List (Attribute msg) -> Customizations data msg -> Customizations data msg
+customizeSort attrs (Customizations current) =
+    Customizations { current | sortAttrs = attrs }
+
+
+customizeRows : (data -> List (Attribute msg)) -> Customizations data msg -> Customizations data msg
+customizeRows customRow (Customizations current) =
+    Customizations { current | rowAttrs = customRow }
 
 
 
@@ -154,25 +220,29 @@ view config sort dataItems =
 
 
 tableView : Config data msg -> Maybe SortState -> List data -> Html msg
-tableView (Config { columns, toId }) maybeSort dataItems =
-    Html.Styled.table [ Attrs.class "striped bordered sortable-table" ]
-        [ thead []
-            [ List.map (headerColumns maybeSort) columns
+tableView (Config { columns, toId, customizations }) maybeSort dataItems =
+    let
+        (Customizations { tableAttrs, theadAttrs, tbodyAttrs, rowAttrs }) =
+            customizations
+    in
+    Html.table tableAttrs
+        [ thead theadAttrs
+            [ List.map (headerColumns maybeSort customizations) columns
                 |> tr []
             ]
         , case toId of
             Just rowId ->
-                List.map (keyedTableRow columns rowId) dataItems
-                    |> Html.Styled.Keyed.node "tbody" []
+                List.map (keyedTableRow columns rowId rowAttrs) dataItems
+                    |> Html.Keyed.node "tbody" tbodyAttrs
 
             Nothing ->
-                List.map (tableRow columns) dataItems
-                    |> tbody []
+                List.map (tableRow columns rowAttrs) dataItems
+                    |> tbody tbodyAttrs
         ]
 
 
-headerColumns : Maybe SortState -> Column data msg -> Html msg
-headerColumns maybeSort col =
+headerColumns : Maybe SortState -> Customizations data msg -> Column data msg -> Html msg
+headerColumns maybeSort (Customizations { sortAttrs }) col =
     case col of
         SimpleColumn { label } ->
             plainHeaderCell label
@@ -187,30 +257,16 @@ headerColumns maybeSort col =
                         th
                             [ sortClick (reverseSort sortState) sortMsg
                             , Attrs.class "header-sort"
-                            , Attrs.css
-                                [ Css.hover [ cursor pointer ]
-                                , color (rgba 0 0 0 0.54)
-                                , fontSize (px 12)
-                                , whiteSpace noWrap
-                                ]
+                            , Attrs.style [ ( "cursor", "pointer" ) ]
                             ]
                             [ span [] [ text label ]
-                            , span
-                                [ Attrs.class "material-icons"
-                                , Attrs.css [ inlineIconStyle ]
-                                ]
-                                [ text (sortArrow sort) ]
+                            , span [ Attrs.class "sort-arrow" ] [ sortArrow sortAttrs sort ]
                             ]
                     else
                         th
                             [ sortClick (changeSort label) sortMsg
                             , Attrs.class "header-sort"
-                            , Attrs.css
-                                [ Css.hover [ cursor pointer ]
-                                , color (rgba 0 0 0 0.54)
-                                , fontSize (px 12)
-                                , whiteSpace noWrap
-                                ]
+                            , Attrs.style [ ( "cursor", "pointer" ) ]
                             ]
                             [ text label ]
 
@@ -224,38 +280,36 @@ sortClick newState sortMsg =
 
 plainHeaderCell : String -> Html msg
 plainHeaderCell label =
-    th
-        [ Attrs.css
-            [ color (rgba 0 0 0 0.54)
-            , fontSize (px 12)
-            , whiteSpace noWrap
-            ]
-        ]
-        [ text label ]
+    th [] [ text label ]
 
 
-sortArrow : SortDir -> String
-sortArrow sort =
+sortArrow : List (Attribute msg) -> SortDir -> Html msg
+sortArrow sortAttrs sort =
     case sort of
         Asc ->
-            "arrow_upward"
+            Icons.upArrow sortAttrs
 
         Desc ->
-            "arrow_downward"
+            Icons.downArrow sortAttrs
 
 
-keyedTableRow : List (Column data msg) -> (data -> String) -> data -> ( String, Html msg )
-keyedTableRow columns toId dataItem =
+keyedTableRow :
+    List (Column data msg)
+    -> (data -> String)
+    -> (data -> List (Attribute msg))
+    -> data
+    -> ( String, Html msg )
+keyedTableRow columns toId rowAttrs dataItem =
     List.map extractColumnData columns
         |> List.map (tableCell dataItem)
-        |> (\cells -> ( toId dataItem, tr [] cells ))
+        |> (\cells -> ( toId dataItem, tr (rowAttrs dataItem) cells ))
 
 
-tableRow : List (Column data msg) -> data -> Html msg
-tableRow columns dataItem =
+tableRow : List (Column data msg) -> (data -> List (Attribute msg)) -> data -> Html msg
+tableRow columns rowAttrs dataItem =
     List.map extractColumnData columns
         |> List.map (tableCell dataItem)
-        |> tr []
+        |> tr (rowAttrs dataItem)
 
 
 tableCell : data -> ( data -> Html msg, List (Attribute msg) ) -> Html msg
