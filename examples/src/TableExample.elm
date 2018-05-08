@@ -104,10 +104,6 @@ tableConfig =
                 ]
             |> Table.customizeTable
                 [ style [ ( "border-collapse", "collapse" ) ] ]
-         -- |> Table.customizeRows
-         --     (\_ ->
-         --         [ style [ ( "background-color", "pink" ) ] ]
-         --     )
         )
 
 

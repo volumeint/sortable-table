@@ -21,6 +21,38 @@ module SortableTable
         , view
         )
 
+{-| This package exposes functions for displaying an HTML table that can be configured for sorting on different columns.
+
+
+# Config
+
+A table requires a config that should NOT be stored in your app's state. Define the config once and pass it into the view function.
+
+@docs Config, Column, createConfig, createKeyedConfig, defineColumn, makeSortable
+
+
+# State
+
+The only state you will need to store in your app model is the `SortState` which stores which column is being sorted on in which direction. There are functions exposed for creating and extracting data about the sort state that can be utilitzed to react to a change in the sort state.
+
+@docs SortState, SortDir(..), initSortState, sortInfo
+
+
+# Customizations
+
+You may specify certain customizations that will take effect in the table view. Most of the functions that are used to specify the customizations take a `List (Attribute ms)` so it can be very verbose.
+
+@docs Customizations, customizeBody, customizeHead, customizeRows, customizeRows, customizeSort, customizeTable
+
+
+# View
+
+There are two functions for displaying the table, `view` and `nonSortingView`. Most users will use the standard `view` function, but `nonSortingView` can be used to short-circuit some functionality if you don't need any of the sorting features.
+
+@docs view, nonSortingView
+
+-}
+
 import Html exposing (..)
 import Html.Attributes as Attrs
 import Html.Events as Events
@@ -38,11 +70,16 @@ type alias ColumnId =
     String
 
 
+{-| Sort direction can either be Asc or Desc
+-}
 type SortDir
     = Asc
     | Desc
 
 
+{-| This is the state that needs to be stored in your application's model.
+Helper methods are provided for creating and extracting data from the state.
+-}
 type SortState
     = SortState ColumnId SortDir
 
@@ -63,13 +100,14 @@ changeSort colId =
 
 
 {-| Used to extract sort info from a SortState if needed for new queries etc.
+Given a SortState - returns a tuple of the columnId, and the SortDir
 -}
 sortInfo : SortState -> ( String, SortDir )
 sortInfo (SortState colId sortDir) =
     ( colId, sortDir )
 
 
-{-| Create an initial SortState
+{-| Create an initial SortState given the a String columnId
 -}
 initSortState : ColumnId -> SortDir -> SortState
 initSortState colId dir =
@@ -98,7 +136,11 @@ type Column data msg
     | SortableColumn (ColumnData { sortMsg : SortState -> msg } data msg)
 
 
-{-| Creates an unsortable column
+{-| Creates an unsortable column.
+Accepts :
+a String that wil be the label displayed in the colulmn header.
+a function that will produce the table cell's Html given the data for that row
+a list of (Attribute msg) that can be used to customize the cells for the column
 -}
 defineColumn : String -> (data -> Html msg) -> List (Attribute msg) -> Column data msg
 defineColumn label viewData cellAttrs =
@@ -123,6 +165,8 @@ makeSortable sortMsg col =
 -- *************
 
 
+{-| Stores the table configuration. Do NOT store this in your application model. Define the config (using the supplied helper methods) once and pass it to the Table's `view` function.
+-}
 type Config data msg
     = Config
         { columns : List (Column data msg)
@@ -132,6 +176,9 @@ type Config data msg
 
 
 {-| Creates a table configuration without uniquely identifiable rows
+Accepts:
+a list of Column definitions
+a set of Customizations for the table
 -}
 createConfig : List (Column data msg) -> Customizations data msg -> Config data msg
 createConfig columns customizations =
@@ -157,6 +204,8 @@ createKeyedConfig toId columns customizations =
 -- **************
 
 
+{-| Stores a structure of customizations to be used in the table display. Can be constructed using the provided helper methods.
+-}
 type Customizations data msg
     = Customizations
         { tableAttrs : List (Attribute msg)
@@ -167,6 +216,15 @@ type Customizations data msg
         }
 
 
+{-| Creates a set of default Customizations (which are no customizations at all)
+This is a useful starting point for chaining specific customizations.
+
+    defaultCustomizations
+        |> customizeBody [ style [("backgroundColor", "pink")] ]
+        |> customizeTable []
+        -- and so on
+
+-}
 defaultCustomizations : Customizations data msg
 defaultCustomizations =
     Customizations
@@ -178,26 +236,36 @@ defaultCustomizations =
         }
 
 
+{-| Add html attributes to customize the <table> tag
+-}
 customizeTable : List (Attribute msg) -> Customizations data msg -> Customizations data msg
 customizeTable attrs (Customizations current) =
     Customizations { current | tableAttrs = attrs }
 
 
+{-| Add html attributes to customize the <thead> tag
+-}
 customizeHead : List (Attribute msg) -> Customizations data msg -> Customizations data msg
 customizeHead attrs (Customizations current) =
     Customizations { current | theadAttrs = attrs }
 
 
+{-| Add html attributes to the <tbody> tag
+-}
 customizeBody : List (Attribute msg) -> Customizations data msg -> Customizations data msg
 customizeBody attrs (Customizations current) =
     Customizations { current | tbodyAttrs = attrs }
 
 
+{-| Add html attributes to the <span> that contains the sort arrow in the header
+-}
 customizeSort : List (Attribute msg) -> Customizations data msg -> Customizations data msg
 customizeSort attrs (Customizations current) =
     Customizations { current | sortAttrs = attrs }
 
 
+{-| Adds html attributes to the <tr> tag. This customization is somewhat different than the other customizations because you must define a function that will be given the data for the specific row. This will let you customize rows based on the data it contains.
+-}
 customizeRows : (data -> List (Attribute msg)) -> Customizations data msg -> Customizations data msg
 customizeRows customRow (Customizations current) =
     Customizations { current | rowAttrs = customRow }
@@ -209,11 +277,21 @@ customizeRows customRow (Customizations current) =
 -- ****
 
 
+{-| Use this if you don't care about any of the columns sorting.
+-}
 nonSortingView : Config data msg -> List data -> Html msg
 nonSortingView config dataItems =
     tableView config Nothing dataItems
 
 
+{-| The standard view function for creating the html that will produce the table with columns defined and data given.
+
+Accepts:
+the config which defines the columns & customizations for the table
+the SortState which should be stored in your app model - and holds the current sort state of the table
+a lit of data that will be displayed in the table
+
+-}
 view : Config data msg -> SortState -> List data -> Html msg
 view config sort dataItems =
     tableView config (Just sort) dataItems
