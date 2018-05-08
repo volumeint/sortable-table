@@ -1,10 +1,10 @@
 {
     "version": "1.0.0",
-    "summary": "A package that provides functions and configurations to easily display a table with sortable columns",
+    "summary": "Easily display a table with sortable columns and allow external message on sort",
     "repository": "https://github.com/volumeint/sortable-table.git",
     "license": "BSD3",
     "source-directories": [
-        "."
+        "src"
     ],
     "exposed-modules": ["SortableTable"],
     "dependencies": {

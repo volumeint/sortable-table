@@ -35,14 +35,14 @@ A table requires a config that should NOT be stored in your app's state. Define 
 
 The only state you will need to store in your app model is the `SortState` which stores which column is being sorted on in which direction. There are functions exposed for creating and extracting data about the sort state that can be utilitzed to react to a change in the sort state.
 
-@docs SortState, SortDir(..), initSortState, sortInfo
+@docs SortState, SortDir, initSortState, sortInfo
 
 
 # Customizations
 
 You may specify certain customizations that will take effect in the table view. Most of the functions that are used to specify the customizations take a `List (Attribute ms)` so it can be very verbose.
 
-@docs Customizations, customizeBody, customizeHead, customizeRows, customizeRows, customizeSort, customizeTable
+@docs Customizations, customizeBody, customizeHead, customizeRows, customizeRows, customizeSort, customizeTable, defaultCustomizations
 
 
 # View
